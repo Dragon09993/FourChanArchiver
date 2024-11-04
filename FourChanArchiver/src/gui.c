@@ -150,6 +150,13 @@ void load_thread_titles(const char *filter) {
 
                 int count = (count_reply && count_reply->type == REDIS_REPLY_STRING) ? atoi(count_reply->str) : 0;
 
+                // Retrieve the status associated with the thread ID
+                char status_key[256];
+                snprintf(status_key, sizeof(status_key), "%s%s_status", board, thread_id);
+                redisReply *status_reply = redisCommand(redis_context, "GET %s", status_key);
+
+                const char *status = (status_reply && status_reply->type == REDIS_REPLY_STRING) ? status_reply->str : "Unknown";
+
                 // Apply filter if provided
                 if (filter == NULL || strstr(title_reply->str, filter) != NULL || strstr(thread_id, filter) != NULL) {
                     GtkTreeIter iter;
@@ -158,10 +165,12 @@ void load_thread_titles(const char *filter) {
                                        0, thread_id,
                                        1, title_reply->str,
                                        2, count,
+                                       3, status,  // Set the status in the new column
                                        -1);
                 }
 
                 if (count_reply) freeReplyObject(count_reply);
+                if (status_reply) freeReplyObject(status_reply);
             }
 
             freeReplyObject(title_reply);
@@ -259,8 +268,8 @@ void create_thread_list_tree_view(GtkWidget *parent_box) {
     thread_tree_view = gtk_tree_view_new();
     GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
 
-    // Model with three columns: Thread_ID, Title, and Count
-    GtkListStore *store = gtk_list_store_new(3, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT);
+    // Model with four columns: Thread_ID, Title, Count, and Status
+    GtkListStore *store = gtk_list_store_new(4, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING);
     gtk_tree_view_set_model(GTK_TREE_VIEW(thread_tree_view), GTK_TREE_MODEL(store));
     g_object_unref(store);
 
@@ -278,6 +287,11 @@ void create_thread_list_tree_view(GtkWidget *parent_box) {
     GtkTreeViewColumn *count_column = gtk_tree_view_column_new_with_attributes("Count", renderer, "text", 2, NULL);
     gtk_tree_view_column_set_sort_column_id(count_column, 2); // Enable sorting by Count
     gtk_tree_view_append_column(GTK_TREE_VIEW(thread_tree_view), count_column);
+
+    // Create Status column
+    GtkTreeViewColumn *status_column = gtk_tree_view_column_new_with_attributes("Status", renderer, "text", 3, NULL);
+    gtk_tree_view_column_set_sort_column_id(status_column, 3); // Enable sorting by Status
+    gtk_tree_view_append_column(GTK_TREE_VIEW(thread_tree_view), status_column);
 
     // Enable right-click event for context menu
     g_signal_connect(thread_tree_view, "button-press-event", G_CALLBACK(show_context_menu), NULL);
